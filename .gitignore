@@ -1,0 +1,22 @@
+.venv/
+__pycache__/
+*.pyc
+*.egg-info/
+build/
+dist/
+# generated, not committed: reproduced by the seed scripts
+examples/*.duckdb
+# runtime provenance log
+ledger.jsonl
+.pytest_cache/
+live_ledger.jsonl
+venv/
+path/
+.DS_Store
+# local-only: your machine's model endpoint + placeholder token, not for the public repo
+local_model_env_variables.txt
+# never commit secrets (e.g. a temporary OpenRouter key file)
+*.env
+# BIRD benchmark data (external, CC BY-SA 4.0; fetch via docs, not committed)
+examples/bird/
+*.sqlite

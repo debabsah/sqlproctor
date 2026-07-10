@@ -1,0 +1,49 @@
+# Semantic contract for the BIRD `financial` database (the PKDD'99 Czech bank schema,
+# as shipped by the BIRD mini-dev benchmark). Columns/pks/joins mirror the real
+# financial.sqlite exactly, so BIRD's own questions and gold SQL run against it.
+#
+# The fan-out hub is `account`: it is the parent of FOUR children (disp, loan, order,
+# trans), so any query that joins account to two of them and sums a child measure
+# (e.g. total transactions and total orders per account) multiplies rows and inflates.
+# Fact-to-fact edges are not declared. There is no soft-delete convention in this
+# schema, so there are no required_filters (as with TPC-DS); REQUIRED_FILTER is not
+# exercised here. No single business metric is declared because BIRD's questions are
+# open-domain rather than centered on one metric.
+version: bird-financial-v1
+
+tables:
+  district:
+    pk: district_id
+    columns: [district_id, A2, A3, A4, A5, A6, A7, A8, A9, A10, A11, A12, A13, A14, A15, A16]
+  account:
+    pk: account_id
+    columns: [account_id, district_id, frequency, date]
+  client:
+    pk: client_id
+    columns: [client_id, gender, birth_date, district_id]
+  disp:
+    pk: disp_id
+    columns: [disp_id, client_id, account_id, type]
+  card:
+    pk: card_id
+    columns: [card_id, disp_id, type, issued]
+  loan:
+    pk: loan_id
+    columns: [loan_id, account_id, date, amount, duration, payments, status]
+  order:
+    pk: order_id
+    columns: [order_id, account_id, bank_to, account_to, amount, k_symbol]
+  trans:
+    pk: trans_id
+    columns: [trans_id, account_id, date, type, operation, amount, balance, k_symbol, bank, account]
+
+joins:
+  # parent PK first. account is the 4-child fan-out hub.
+  - [district, district_id, account, district_id]
+  - [district, district_id, client, district_id]
+  - [client, client_id, disp, client_id]
+  - [account, account_id, disp, account_id]
+  - [account, account_id, loan, account_id]
+  - [account, account_id, order, account_id]
+  - [account, account_id, trans, account_id]
+  - [disp, disp_id, card, disp_id]

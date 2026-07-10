@@ -1,0 +1,303 @@
+{
+  "meta": {
+    "provider": "local",
+    "model": "qwen36-27b-mtp-q4km",
+    "schema": "saas",
+    "ts": "2026-07-08T23:21:35Z",
+    "git_sha": "47a40e296",
+    "contract_version": "saas-v1",
+    "contract_sha256": "f497f75f6b172607aa8bc29e35fcf60bd8c7a0fffed74b3dfa2a62b384e8968b"
+  },
+  "summary": {
+    "n": 14,
+    "first_blocked": 5,
+    "verified": 14,
+    "self_corrected": 5,
+    "kinds": {
+      "METRIC": 2,
+      "JOIN_PATH": 1,
+      "REQUIRED_FILTER": 3
+    },
+    "errored": 0
+  },
+  "records": [
+    {
+      "question": "What is our total billed revenue?",
+      "queried": true,
+      "first_blocked": false,
+      "first_kinds": [],
+      "verified": true,
+      "turns": 1,
+      "trace": [
+        {
+          "sql": "SELECT SUM(amount) AS total_billed_revenue FROM invoices WHERE voided_at IS NULL",
+          "status": "verified",
+          "kinds": []
+        }
+      ],
+      "stop": "stop"
+    },
+    {
+      "question": "What is our billed revenue broken down by account region?",
+      "queried": true,
+      "first_blocked": true,
+      "first_kinds": [
+        "METRIC"
+      ],
+      "verified": true,
+      "turns": 2,
+      "trace": [
+        {
+          "sql": "SELECT\n    a.region,\n    SUM(i.amount) AS billed_revenue\nFROM invoices i\nJOIN accounts a ON i.account_id = a.account_id\nWHERE i.voided_at IS NULL\nGROUP BY a.region\nORDER BY billed_revenue DESC",
+          "status": "blocked",
+          "kinds": [
+            "METRIC"
+          ]
+        },
+        {
+          "sql": "SELECT\n    a.region,\n    SUM(ili.amount) AS billed_revenue\nFROM invoices i\nJOIN invoice_line_items ili ON i.invoice_id = ili.invoice_id\nJOIN accounts a ON i.account_id = a.account_id\nWHERE i.voided_at IS NULL\nGROUP BY a.region\nORDER BY billed_revenue DESC",
+          "status": "verified",
+          "kinds": []
+        }
+      ],
+      "stop": "stop"
+    },
+    {
+      "question": "How much have we collected in payments so far?",
+      "queried": true,
+      "first_blocked": false,
+      "first_kinds": [],
+      "verified": true,
+      "turns": 1,
+      "trace": [
+        {
+          "sql": "SELECT SUM(amount) FROM payments;",
+          "status": "verified",
+          "kinds": []
+        }
+      ],
+      "stop": "stop"
+    },
+    {
+      "question": "What is our billed revenue by payment method?",
+      "queried": true,
+      "first_blocked": false,
+      "first_kinds": [],
+      "verified": true,
+      "turns": 1,
+      "trace": [
+        {
+          "sql": "SELECT method, SUM(amount) AS billed_revenue\nFROM payments\nGROUP BY method\nORDER BY billed_revenue DESC",
+          "status": "verified",
+          "kinds": []
+        }
+      ],
+      "stop": "stop"
+    },
+    {
+      "question": "What is our current monthly recurring revenue (MRR)?",
+      "queried": true,
+      "first_blocked": false,
+      "first_kinds": [],
+      "verified": true,
+      "turns": 1,
+      "trace": [
+        {
+          "sql": "SELECT SUM(mrr_amount) AS current_mrr\nFROM subscriptions\nWHERE canceled_at IS NULL;",
+          "status": "verified",
+          "kinds": []
+        }
+      ],
+      "stop": "stop"
+    },
+    {
+      "question": "What is our MRR broken down by plan tier?",
+      "queried": true,
+      "first_blocked": false,
+      "first_kinds": [],
+      "verified": true,
+      "turns": 1,
+      "trace": [
+        {
+          "sql": "SELECT\n    a.plan_tier,\n    SUM(s.mrr_amount) as total_mrr\nFROM subscriptions s\nJOIN accounts a ON s.account_id = a.account_id\nWHERE s.canceled_at IS NULL\nGROUP BY a.plan_tier\nORDER BY total_mrr DESC",
+          "status": "verified",
+          "kinds": []
+        }
+      ],
+      "stop": "stop"
+    },
+    {
+      "question": "How many active subscriptions do we have?",
+      "queried": true,
+      "first_blocked": false,
+      "first_kinds": [],
+      "verified": true,
+      "turns": 1,
+      "trace": [
+        {
+          "sql": "SELECT COUNT(*) FROM subscriptions WHERE canceled_at IS NULL;",
+          "status": "verified",
+          "kinds": []
+        }
+      ],
+      "stop": "stop"
+    },
+    {
+      "question": "What is the total usage, in units, per subscription?",
+      "queried": true,
+      "first_blocked": true,
+      "first_kinds": [
+        "JOIN_PATH",
+        "REQUIRED_FILTER"
+      ],
+      "verified": true,
+      "turns": 3,
+      "trace": [
+        {
+          "sql": "SELECT s.subscription_id, SUM(u.units) as total_units\nFROM subscriptions s\nJOIN usage_events u ON s.account_id = u.account_id\nGROUP BY s.subscription_id\nORDER BY s.subscription_id",
+          "status": "blocked",
+          "kinds": [
+            "JOIN_PATH",
+            "REQUIRED_FILTER"
+          ]
+        },
+        {
+          "sql": "SELECT s.subscription_id, COALESCE(SUM(u.units), 0) as total_units\nFROM subscriptions s\nJOIN accounts a ON s.account_id = a.account_id\nJOIN usage_events u ON a.account_id = u.account_id\nWHERE s.canceled_at IS NULL\nGROUP BY s.subscription_id\nORDER BY s.subscription_id",
+          "status": "blocked",
+          "kinds": [
+            "FAN_OUT"
+          ]
+        },
+        {
+          "sql": "WITH account_usage AS (\n    SELECT account_id, SUM(units) as total_units\n    FROM usage_events\n    GROUP BY account_id\n)\nSELECT s.subscription_id, COALESCE(au.total_units, 0) as total_units\nFROM subscriptions s\nJOIN account_usage au ON s.account_id = au.account_id\nWHERE s.canceled_at IS NULL\nORDER BY s.subscription_id",
+          "status": "verified",
+          "kinds": []
+        }
+      ],
+      "stop": "stop"
+    },
+    {
+      "question": "What is our billed revenue from enterprise accounts?",
+      "queried": true,
+      "first_blocked": true,
+      "first_kinds": [
+        "METRIC"
+      ],
+      "verified": true,
+      "turns": 2,
+      "trace": [
+        {
+          "sql": "SELECT SUM(i.amount) AS billed_revenue\nFROM invoices i\nJOIN accounts a ON i.account_id = a.account_id\nWHERE LOWER(a.plan_tier) = 'enterprise'\n  AND i.voided_at IS NULL",
+          "status": "blocked",
+          "kinds": [
+            "METRIC"
+          ]
+        },
+        {
+          "sql": "SELECT SUM(ili.amount) AS billed_revenue\nFROM invoices i\nJOIN accounts a ON i.account_id = a.account_id\nJOIN invoice_line_items ili ON i.invoice_id = ili.invoice_id\nWHERE LOWER(a.plan_tier) = 'enterprise'\n  AND i.voided_at IS NULL",
+          "status": "verified",
+          "kinds": []
+        }
+      ],
+      "stop": "stop"
+    },
+    {
+      "question": "How much revenue did we bill in each region, counting only invoices that were paid?",
+      "queried": true,
+      "first_blocked": false,
+      "first_kinds": [],
+      "verified": true,
+      "turns": 1,
+      "trace": [
+        {
+          "sql": "SELECT\n    a.region,\n    SUM(i.amount) AS total_billed_revenue\nFROM accounts a\nJOIN invoices i ON a.account_id = i.account_id\nWHERE i.voided_at IS NULL\nAND i.invoice_id IN (SELECT invoice_id FROM payments)\nGROUP BY a.region",
+          "status": "verified",
+          "kinds": []
+        }
+      ],
+      "stop": "stop"
+    },
+    {
+      "question": "What is the average invoice amount?",
+      "queried": true,
+      "first_blocked": true,
+      "first_kinds": [
+        "REQUIRED_FILTER"
+      ],
+      "verified": true,
+      "turns": 2,
+      "trace": [
+        {
+          "sql": "SELECT AVG(amount) AS average_invoice_amount FROM invoices",
+          "status": "blocked",
+          "kinds": [
+            "REQUIRED_FILTER"
+          ]
+        },
+        {
+          "sql": "SELECT AVG(amount) AS average_invoice_amount FROM invoices WHERE voided_at IS NULL",
+          "status": "verified",
+          "kinds": []
+        }
+      ],
+      "stop": "stop"
+    },
+    {
+      "question": "What is our total billed revenue per plan tier?",
+      "queried": true,
+      "first_blocked": false,
+      "first_kinds": [],
+      "verified": true,
+      "turns": 1,
+      "trace": [
+        {
+          "sql": "SELECT\n    a.plan_tier,\n    SUM(i.amount) AS total_billed_revenue\nFROM accounts a\nJOIN invoices i ON a.account_id = i.account_id\nWHERE i.voided_at IS NULL\nGROUP BY a.plan_tier\nORDER BY total_billed_revenue DESC",
+          "status": "verified",
+          "kinds": []
+        }
+      ],
+      "stop": "stop"
+    },
+    {
+      "question": "How many distinct accounts have been billed?",
+      "queried": true,
+      "first_blocked": true,
+      "first_kinds": [
+        "REQUIRED_FILTER"
+      ],
+      "verified": true,
+      "turns": 2,
+      "trace": [
+        {
+          "sql": "SELECT COUNT(DISTINCT account_id) FROM invoices;",
+          "status": "blocked",
+          "kinds": [
+            "REQUIRED_FILTER"
+          ]
+        },
+        {
+          "sql": "SELECT COUNT(DISTINCT account_id) FROM invoices WHERE voided_at IS NULL;",
+          "status": "verified",
+          "kinds": []
+        }
+      ],
+      "stop": "stop"
+    },
+    {
+      "question": "What is our average billed revenue per account?",
+      "queried": true,
+      "first_blocked": false,
+      "first_kinds": [],
+      "verified": true,
+      "turns": 1,
+      "trace": [
+        {
+          "sql": "SELECT SUM(amount) / COUNT(DISTINCT account_id) AS avg_billed_revenue_per_account\nFROM invoices\nWHERE voided_at IS NULL",
+          "status": "verified",
+          "kinds": []
+        }
+      ],
+      "stop": "stop"
+    }
+  ]
+}

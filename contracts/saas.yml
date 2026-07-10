@@ -1,0 +1,50 @@
+# Semantic contract for the demo SaaS billing schema (examples/saas_seed.py).
+# tables/columns/pk/joins mirror what `sqlproctor bootstrap` generates from the seeded
+# DuckDB; required_filters and metrics are the curated delta (not inferable from
+# schema alone). Same failure modes as contracts/retail.yml, messier shape.
+version: saas-v1
+
+tables:
+  accounts:
+    pk: account_id
+    columns: [account_id, plan_tier, region, signed_up_at, churned_at]
+  subscriptions:
+    pk: subscription_id
+    columns: [subscription_id, account_id, started_at, canceled_at, mrr_amount]
+    required_filters:
+      - {column: canceled_at, op: "IS NULL"}   # curated: canceled subs are not active MRR
+  invoices:
+    pk: invoice_id
+    columns: [invoice_id, account_id, issued_at, amount, voided_at]
+    required_filters:
+      - {column: voided_at, op: "IS NULL"}      # curated: voided invoices are not real billings
+  invoice_line_items:
+    pk: line_id
+    columns: [line_id, invoice_id, product, amount, quantity]
+  payments:
+    pk: payment_id
+    columns: [payment_id, invoice_id, paid_at, amount, method]
+  usage_events:
+    pk: event_id
+    columns: [event_id, account_id, occurred_at, units]
+
+joins:
+  # parent PK first. usage_events<->subscriptions is deliberately NOT an edge:
+  # both hang off accounts, so joining them directly is an undeclared relationship.
+  - [accounts, account_id, subscriptions, account_id]
+  - [accounts, account_id, invoices, account_id]
+  - [accounts, account_id, usage_events, account_id]
+  - [invoices, invoice_id, invoice_line_items, invoice_id]
+  - [invoices, invoice_id, payments, invoice_id]
+
+metrics:
+  # billed_revenue lives at the line-item grain. Summing it while joined to payments
+  # (a sibling child of invoices) multiplies rows; summing it without going through
+  # invoices counts voided invoices' revenue.
+  - {name: billed_revenue, agg: SUM, table: invoice_line_items, column: amount, grain: line_item,
+     requires_filters: [{table: invoices, column: voided_at, op: "IS NULL"}],
+     description: "Billed revenue = sum of invoice_line_items.amount over non-voided invoices"}
+  # mrr lives at the subscription grain over active subscriptions only.
+  - {name: mrr, agg: SUM, table: subscriptions, column: mrr_amount, grain: subscription,
+     requires_filters: [{table: subscriptions, column: canceled_at, op: "IS NULL"}],
+     description: "Monthly recurring revenue = sum of subscriptions.mrr_amount over active subs"}

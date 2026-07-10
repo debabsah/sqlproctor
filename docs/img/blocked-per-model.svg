@@ -1,0 +1,24 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 760 258" width="760" height="258" font-family="system-ui,-apple-system,'Segoe UI',Roboto,Helvetica,Arial,sans-serif" role="img">
+<rect x="1" y="1" width="758" height="256" rx="16" fill="#FBFBFC" stroke="#E4E7EC" stroke-width="1"/>
+<text x="30" y="34" font-family="ui-monospace,'SFMono-Regular',Menlo,Consolas,monospace" font-size="11.5" fill="#8B929C" text-anchor="start" font-weight="400" letter-spacing="1.2">NO MODEL IS SAFE   ·   retail   ·   16 questions   ·   effort high</text>
+<text x="30" y="60" font-family="system-ui,-apple-system,'Segoe UI',Roboto,Helvetica,Arial,sans-serif" font-size="19.5" fill="#14171C" text-anchor="start" font-weight="650" letter-spacing="0">Every model trips the contract on its own first query</text>
+<text x="30" y="109" font-family="system-ui,-apple-system,'Segoe UI',Roboto,Helvetica,Arial,sans-serif" font-size="13.5" fill="#14171C" text-anchor="start" font-weight="560" letter-spacing="0">Claude Opus 4.8</text>
+<rect x="196" y="94" width="476" height="24" rx="6" fill="#EEF0F2" stroke="#E4E7EC" stroke-width="1"/>
+<rect x="196" y="94" width="446.25" height="24" rx="6" fill="#2A2F37" stroke="none" stroke-width="1"/>
+<text x="730" y="111" font-family="ui-monospace,'SFMono-Regular',Menlo,Consolas,monospace" font-size="13.5" fill="#14171C" text-anchor="end" font-weight="700" letter-spacing="0">15/16</text>
+<line x1="30" y1="124" x2="730" y2="124" stroke="#E4E7EC" stroke-width="1"/>
+<text x="30" y="151" font-family="system-ui,-apple-system,'Segoe UI',Roboto,Helvetica,Arial,sans-serif" font-size="13.5" fill="#14171C" text-anchor="start" font-weight="560" letter-spacing="0">Gemini 3.1 Pro</text>
+<rect x="196" y="136" width="476" height="24" rx="6" fill="#EEF0F2" stroke="#E4E7EC" stroke-width="1"/>
+<rect x="196" y="136" width="267.75" height="24" rx="6" fill="#2A2F37" stroke="none" stroke-width="1"/>
+<text x="730" y="153" font-family="ui-monospace,'SFMono-Regular',Menlo,Consolas,monospace" font-size="13.5" fill="#14171C" text-anchor="end" font-weight="700" letter-spacing="0">9/16</text>
+<line x1="30" y1="166" x2="730" y2="166" stroke="#E4E7EC" stroke-width="1"/>
+<text x="30" y="193" font-family="system-ui,-apple-system,'Segoe UI',Roboto,Helvetica,Arial,sans-serif" font-size="13.5" fill="#14171C" text-anchor="start" font-weight="560" letter-spacing="0">GPT-5.5</text>
+<rect x="196" y="178" width="476" height="24" rx="6" fill="#EEF0F2" stroke="#E4E7EC" stroke-width="1"/>
+<rect x="196" y="178" width="238.0" height="24" rx="6" fill="#2A2F37" stroke="none" stroke-width="1"/>
+<text x="730" y="195" font-family="ui-monospace,'SFMono-Regular',Menlo,Consolas,monospace" font-size="13.5" fill="#14171C" text-anchor="end" font-weight="700" letter-spacing="0">8/16</text>
+<line x1="30" y1="208" x2="730" y2="208" stroke="#E4E7EC" stroke-width="1"/>
+<text x="30" y="235" font-family="system-ui,-apple-system,'Segoe UI',Roboto,Helvetica,Arial,sans-serif" font-size="13.5" fill="#14171C" text-anchor="start" font-weight="560" letter-spacing="0">GLM-5.2</text>
+<rect x="196" y="220" width="476" height="24" rx="6" fill="#EEF0F2" stroke="#E4E7EC" stroke-width="1"/>
+<rect x="196" y="220" width="238.0" height="24" rx="6" fill="#2A2F37" stroke="none" stroke-width="1"/>
+<text x="730" y="237" font-family="ui-monospace,'SFMono-Regular',Menlo,Consolas,monospace" font-size="13.5" fill="#14171C" text-anchor="end" font-weight="700" letter-spacing="0">8/16</text>
+</svg>

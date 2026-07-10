@@ -1,0 +1,183 @@
+# Accuracy benchmark. A mix of correct queries (must pass) and wrong queries an
+# agent plausibly writes (should be caught). Two wrong cases are deliberately
+# beyond what a schema-level contract can see, so the catch rate is honest, not
+# a rigged 100%.
+#
+# label: correct  -> a right query; blocking it would be a false positive
+# label: wrong    -> a wrong query; `catchable` says whether sqlproctor can see it
+#   kind: the violation sqlproctor should raise (catchable cases only)
+#   fix:  the query a self-correcting agent would run after being blocked
+
+cases:
+  # ---- correct queries: must NOT be blocked ----
+  - id: revenue_by_region
+    label: correct
+    sql: >
+      SELECT c.region, SUM(oi.net_amount) AS revenue
+      FROM orders o
+      JOIN order_items oi ON o.order_id = oi.order_id
+      JOIN customers c ON o.customer_id = c.customer_id
+      WHERE o.deleted_at IS NULL
+      GROUP BY c.region
+
+  - id: total_revenue
+    label: correct
+    sql: >
+      SELECT SUM(oi.net_amount) AS revenue
+      FROM orders o
+      JOIN order_items oi ON o.order_id = oi.order_id
+      WHERE o.deleted_at IS NULL
+
+  - id: active_order_count
+    label: correct
+    sql: >
+      SELECT COUNT(*) AS orders
+      FROM orders o
+      WHERE o.deleted_at IS NULL
+
+  - id: orders_per_region
+    label: correct
+    sql: >
+      SELECT c.region, COUNT(*) AS orders
+      FROM orders o
+      JOIN customers c ON o.customer_id = c.customer_id
+      WHERE o.deleted_at IS NULL
+      GROUP BY c.region
+
+  # ---- wrong queries sqlproctor catches ----
+  - id: fan_out_shipments
+    label: wrong
+    catchable: true
+    kind: FAN_OUT
+    sql: >
+      SELECT SUM(oi.net_amount) AS revenue
+      FROM orders o
+      JOIN order_items oi ON o.order_id = oi.order_id
+      JOIN shipments s ON o.order_id = s.order_id
+      WHERE o.deleted_at IS NULL
+    fix: >
+      SELECT SUM(oi.net_amount) AS revenue
+      FROM orders o
+      JOIN order_items oi ON o.order_id = oi.order_id
+      WHERE o.deleted_at IS NULL
+
+  - id: missing_soft_delete
+    label: wrong
+    catchable: true
+    kind: REQUIRED_FILTER
+    sql: >
+      SELECT SUM(oi.net_amount) AS revenue
+      FROM orders o
+      JOIN order_items oi ON o.order_id = oi.order_id
+    fix: >
+      SELECT SUM(oi.net_amount) AS revenue
+      FROM orders o
+      JOIN order_items oi ON o.order_id = oi.order_id
+      WHERE o.deleted_at IS NULL
+
+  - id: hallucinated_column
+    label: wrong
+    catchable: true
+    kind: SURFACE
+    sql: >
+      SELECT SUM(o.total_amount) AS revenue
+      FROM orders o
+      WHERE o.deleted_at IS NULL
+    fix: >
+      SELECT SUM(oi.net_amount) AS revenue
+      FROM orders o
+      JOIN order_items oi ON o.order_id = oi.order_id
+      WHERE o.deleted_at IS NULL
+
+  - id: wrong_key_join
+    label: wrong
+    catchable: true
+    kind: JOIN_PATH
+    sql: >
+      SELECT c.region, COUNT(*) AS orders
+      FROM orders o
+      JOIN customers c ON o.order_id = c.customer_id
+      WHERE o.deleted_at IS NULL
+      GROUP BY c.region
+    fix: >
+      SELECT c.region, COUNT(*) AS orders
+      FROM orders o
+      JOIN customers c ON o.customer_id = c.customer_id
+      WHERE o.deleted_at IS NULL
+      GROUP BY c.region
+
+  - id: avg_not_sum_revenue
+    label: wrong
+    catchable: true
+    kind: METRIC
+    sql: >
+      SELECT AVG(oi.net_amount) AS revenue
+      FROM orders o
+      JOIN order_items oi ON o.order_id = oi.order_id
+      WHERE o.deleted_at IS NULL
+    fix: >
+      SELECT SUM(oi.net_amount) AS revenue
+      FROM orders o
+      JOIN order_items oi ON o.order_id = oi.order_id
+      WHERE o.deleted_at IS NULL
+
+  - id: count_fan_out
+    label: wrong
+    catchable: true
+    kind: FAN_OUT
+    sql: >
+      SELECT COUNT(oi.item_id) AS items
+      FROM orders o
+      JOIN order_items oi ON o.order_id = oi.order_id
+      JOIN shipments s ON o.order_id = s.order_id
+      WHERE o.deleted_at IS NULL
+    fix: >
+      SELECT COUNT(oi.item_id) AS items
+      FROM orders o
+      JOIN order_items oi ON o.order_id = oi.order_id
+      WHERE o.deleted_at IS NULL
+
+  - id: revenue_off_child_table
+    label: wrong
+    catchable: true
+    kind: METRIC
+    note: "sums order_items directly, bypassing the orders soft-delete filter (the GLM 5.2 miss)."
+    sql: >
+      SELECT SUM(net_amount) AS total_revenue
+      FROM order_items
+    fix: >
+      SELECT SUM(oi.net_amount) AS total_revenue
+      FROM orders o
+      JOIN order_items oi ON o.order_id = oi.order_id
+      WHERE o.deleted_at IS NULL
+
+  # ---- wrong queries beyond a schema-level contract (honest misses) ----
+  - id: status_value_typo
+    label: wrong
+    catchable: false
+    note: "filters status = 'complete', but the real value is 'completed'. A value-level error the contract does not model."
+    sql: >
+      SELECT SUM(oi.net_amount) AS revenue
+      FROM orders o
+      JOIN order_items oi ON o.order_id = oi.order_id
+      WHERE o.deleted_at IS NULL AND o.status = 'complete'
+    fix: >
+      SELECT SUM(oi.net_amount) AS revenue
+      FROM orders o
+      JOIN order_items oi ON o.order_id = oi.order_id
+      WHERE o.deleted_at IS NULL AND o.status = 'completed'
+
+  - id: unaliased_wrong_metric
+    label: wrong
+    catchable: false
+    note: "sums quantity but labels it total_revenue; not aliased as the declared metric name, so grain cannot be checked."
+    sql: >
+      SELECT SUM(oi.quantity) AS total_revenue
+      FROM orders o
+      JOIN order_items oi ON o.order_id = oi.order_id
+      WHERE o.deleted_at IS NULL
+    fix: >
+      SELECT SUM(oi.net_amount) AS total_revenue
+      FROM orders o
+      JOIN order_items oi ON o.order_id = oi.order_id
+      WHERE o.deleted_at IS NULL

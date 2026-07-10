@@ -1,0 +1,451 @@
+{
+  "meta": {
+    "provider": "openrouter",
+    "model": "openai/gpt-5.5",
+    "schema": "retail",
+    "effort": "high",
+    "ts": "2026-07-09T00:30:15Z",
+    "git_sha": "9a6ca1403",
+    "contract_version": "v1",
+    "contract_sha256": "dff363a1bdbd2a28b938e767fd45e5af01c800dfba97740263135bb601e220f8"
+  },
+  "summary": {
+    "n": 16,
+    "first_blocked": 8,
+    "verified": 16,
+    "self_corrected": 8,
+    "kinds": {
+      "REQUIRED_FILTER": 6,
+      "FAN_OUT": 4
+    },
+    "errored": 0
+  },
+  "records": [
+    {
+      "question": "What was our total revenue?",
+      "queried": true,
+      "first_blocked": false,
+      "first_kinds": [],
+      "verified": true,
+      "turns": 1,
+      "trace": [
+        {
+          "sql": "SELECT SUM(oi.net_amount) AS total_revenue\nFROM order_items oi\nJOIN orders o ON o.order_id = oi.order_id\nWHERE o.deleted_at IS NULL;",
+          "status": "verified",
+          "kinds": []
+        }
+      ],
+      "stop": "stop"
+    },
+    {
+      "question": "What is our revenue broken down by customer region?",
+      "queried": true,
+      "first_blocked": true,
+      "first_kinds": [
+        "REQUIRED_FILTER"
+      ],
+      "verified": true,
+      "turns": 3,
+      "trace": [
+        {
+          "sql": "SELECT status, COUNT(*) AS orders FROM orders GROUP BY status ORDER BY orders DESC",
+          "status": "blocked",
+          "kinds": [
+            "REQUIRED_FILTER"
+          ]
+        },
+        {
+          "sql": "SELECT status, COUNT(*) AS orders\nFROM orders\nWHERE deleted_at IS NULL\nGROUP BY status\nORDER BY orders DESC",
+          "status": "verified",
+          "kinds": []
+        },
+        {
+          "sql": "SELECT c.region, SUM(oi.net_amount) AS revenue\nFROM orders o\nJOIN customers c ON c.customer_id = o.customer_id\nJOIN order_items oi ON oi.order_id = o.order_id\nWHERE o.deleted_at IS NULL\n  AND o.status = 'completed'\nGROUP BY c.region\nORDER BY revenue DESC",
+          "status": "verified",
+          "kinds": []
+        }
+      ],
+      "stop": "stop"
+    },
+    {
+      "question": "How much revenue came from orders shipped by FedEx?",
+      "queried": true,
+      "first_blocked": true,
+      "first_kinds": [
+        "REQUIRED_FILTER"
+      ],
+      "verified": true,
+      "turns": 3,
+      "trace": [
+        {
+          "sql": "SELECT status, COUNT(*) AS orders, COUNT(*) FILTER (WHERE deleted_at IS NOT NULL) AS deleted FROM orders GROUP BY status ORDER BY status",
+          "status": "blocked",
+          "kinds": [
+            "REQUIRED_FILTER"
+          ]
+        },
+        {
+          "sql": "SELECT SUM(oi.net_amount) AS revenue\nFROM order_items oi\nJOIN orders o ON o.order_id = oi.order_id\nWHERE o.deleted_at IS NULL\n  AND EXISTS (\n    SELECT 1\n    FROM shipments s\n    WHERE s.order_id = o.order_id\n      AND s.carrier = 'FedEx'\n  );",
+          "status": "blocked",
+          "kinds": [
+            "FAN_OUT"
+          ]
+        },
+        {
+          "sql": "WITH item_totals AS (\n  SELECT order_id, SUM(net_amount) AS order_revenue\n  FROM order_items\n  GROUP BY order_id\n), fedex_orders AS (\n  SELECT DISTINCT order_id\n  FROM shipments\n  WHERE carrier = 'FedEx'\n)\nSELECT SUM(it.order_revenue) AS revenue\nFROM fedex_orders f\nJOIN orders o ON o.order_id = f.order_id\nJOIN item_totals it ON it.order_id = o.order_id\nWHERE o.deleted_at IS NULL;",
+          "status": "verified",
+          "kinds": []
+        }
+      ],
+      "stop": "stop"
+    },
+    {
+      "question": "What is the total quantity of items sold, grouped by shipping carrier?",
+      "queried": true,
+      "first_blocked": true,
+      "first_kinds": [
+        "REQUIRED_FILTER"
+      ],
+      "verified": true,
+      "turns": 8,
+      "trace": [
+        {
+          "sql": "SELECT status, COUNT(*) AS n, COUNT(*) FILTER (WHERE deleted_at IS NOT NULL) AS deleted_n FROM orders GROUP BY status ORDER BY status",
+          "status": "blocked",
+          "kinds": [
+            "REQUIRED_FILTER"
+          ]
+        },
+        {
+          "sql": "SELECT COUNT(*) AS shipment_rows, COUNT(DISTINCT order_id) AS shipped_orders, COUNT(*) - COUNT(DISTINCT order_id) AS extra_shipments FROM shipments",
+          "status": "verified",
+          "kinds": []
+        },
+        {
+          "sql": "SELECT s.carrier, SUM(oi.quantity) AS total_quantity FROM shipments s JOIN orders o ON o.order_id = s.order_id JOIN order_items oi ON oi.order_id = o.order_id WHERE o.deleted_at IS NULL AND lower(o.status) NOT IN ('cancelled','canceled') GROUP BY s.carrier ORDER BY s.carrier",
+          "status": "blocked",
+          "kinds": [
+            "FAN_OUT"
+          ]
+        },
+        {
+          "sql": "SELECT status, COUNT(*) AS n FROM orders WHERE deleted_at IS NULL GROUP BY status ORDER BY status",
+          "status": "verified",
+          "kinds": []
+        },
+        {
+          "sql": "WITH shipped_orders AS (SELECT DISTINCT order_id FROM shipments) SELECT o.status, COUNT(DISTINCT o.order_id) AS orders FROM orders o JOIN shipped_orders so ON so.order_id=o.order_id WHERE o.deleted_at IS NULL GROUP BY o.status ORDER BY o.status",
+          "status": "verified",
+          "kinds": []
+        },
+        {
+          "sql": "WITH order_qty AS (SELECT order_id, SUM(quantity) AS qty FROM order_items GROUP BY order_id), order_carrier AS (SELECT DISTINCT order_id, carrier FROM shipments) SELECT oc.carrier, SUM(oq.qty) AS total_quantity FROM order_carrier oc JOIN orders o ON o.order_id=oc.order_id JOIN order_qty oq ON oq.order_id=oc.order_id WHERE o.deleted_at IS NULL AND lower(o.status) NOT IN ('cancelled','canceled') GROUP BY oc.carrier ORDER BY oc.carrier",
+          "status": "verified",
+          "kinds": []
+        },
+        {
+          "sql": "WITH order_carrier AS (SELECT order_id, COUNT(DISTINCT carrier) AS carriers FROM shipments GROUP BY order_id) SELECT carriers, COUNT(*) AS orders FROM order_carrier GROUP BY carriers ORDER BY carriers",
+          "status": "verified",
+          "kinds": []
+        },
+        {
+          "sql": "WITH order_qty AS (SELECT order_id, SUM(quantity) AS qty FROM order_items GROUP BY order_id), order_carrier AS (SELECT DISTINCT order_id, carrier FROM shipments) SELECT oc.carrier, SUM(oq.qty) AS total_quantity FROM order_carrier oc JOIN orders o ON o.order_id=oc.order_id JOIN order_qty oq ON oq.order_id=oc.order_id WHERE o.deleted_at IS NULL AND lower(o.status) = 'completed' GROUP BY oc.carrier ORDER BY oc.carrier",
+          "status": "verified",
+          "kinds": []
+        }
+      ],
+      "stop": "stop"
+    },
+    {
+      "question": "Which three regions generated the most revenue?",
+      "queried": true,
+      "first_blocked": false,
+      "first_kinds": [],
+      "verified": true,
+      "turns": 1,
+      "trace": [
+        {
+          "sql": "SELECT c.region, SUM(oi.net_amount) AS revenue\nFROM customers c\nJOIN orders o ON o.customer_id = c.customer_id\nJOIN order_items oi ON oi.order_id = o.order_id\nWHERE o.deleted_at IS NULL\nGROUP BY c.region\nORDER BY revenue DESC\nLIMIT 3;",
+          "status": "verified",
+          "kinds": []
+        }
+      ],
+      "stop": "stop"
+    },
+    {
+      "question": "How many orders have we received?",
+      "queried": true,
+      "first_blocked": false,
+      "first_kinds": [],
+      "verified": true,
+      "turns": 1,
+      "trace": [
+        {
+          "sql": "SELECT COUNT(*) AS total_orders, COUNT(*) FILTER (WHERE deleted_at IS NULL) AS non_deleted_orders, COUNT(*) FILTER (WHERE deleted_at IS NOT NULL) AS deleted_orders FROM orders;",
+          "status": "verified",
+          "kinds": []
+        }
+      ],
+      "stop": "stop"
+    },
+    {
+      "question": "What is our average revenue per order?",
+      "queried": true,
+      "first_blocked": false,
+      "first_kinds": [],
+      "verified": true,
+      "turns": 2,
+      "trace": [
+        {
+          "sql": "SELECT status, COUNT(*) AS orders, SUM(CASE WHEN deleted_at IS NULL THEN 1 ELSE 0 END) AS not_deleted\nFROM orders\nGROUP BY status\nORDER BY status;",
+          "status": "verified",
+          "kinds": []
+        },
+        {
+          "sql": "SELECT \n  COUNT(DISTINCT o.order_id) AS completed_orders,\n  SUM(oi.net_amount) AS total_revenue,\n  SUM(oi.net_amount) / COUNT(DISTINCT o.order_id) AS avg_revenue_per_order\nFROM orders o\nJOIN order_items oi ON oi.order_id = o.order_id\nWHERE o.deleted_at IS NULL\n  AND o.status = 'completed';",
+          "status": "verified",
+          "kinds": []
+        }
+      ],
+      "stop": "stop"
+    },
+    {
+      "question": "What is our total revenue from completed orders?",
+      "queried": true,
+      "first_blocked": false,
+      "first_kinds": [],
+      "verified": true,
+      "turns": 1,
+      "trace": [
+        {
+          "sql": "SELECT SUM(oi.net_amount) AS total_revenue\nFROM orders o\nJOIN order_items oi ON oi.order_id = o.order_id\nWHERE LOWER(o.status) = 'completed'\n  AND o.deleted_at IS NULL;",
+          "status": "verified",
+          "kinds": []
+        }
+      ],
+      "stop": "stop"
+    },
+    {
+      "question": "How many items were shipped via UPS?",
+      "queried": true,
+      "first_blocked": true,
+      "first_kinds": [
+        "REQUIRED_FILTER",
+        "FAN_OUT",
+        "FAN_OUT"
+      ],
+      "verified": true,
+      "turns": 2,
+      "trace": [
+        {
+          "sql": "SELECT COUNT(*) AS line_items, SUM(oi.quantity) AS total_quantity, COUNT(DISTINCT oi.item_id) AS distinct_items, COUNT(DISTINCT o.order_id) AS orders\nFROM shipments s\nJOIN orders o ON o.order_id = s.order_id\nJOIN order_items oi ON oi.order_id = o.order_id\nWHERE s.carrier = 'UPS';",
+          "status": "blocked",
+          "kinds": [
+            "REQUIRED_FILTER",
+            "FAN_OUT",
+            "FAN_OUT"
+          ]
+        },
+        {
+          "sql": "WITH ups_orders AS (\n  SELECT DISTINCT order_id\n  FROM shipments\n  WHERE carrier = 'UPS'\n), item_counts AS (\n  SELECT order_id, SUM(quantity) AS item_quantity\n  FROM order_items\n  GROUP BY order_id\n)\nSELECT SUM(ic.item_quantity) AS items_shipped_via_ups\nFROM ups_orders u\nJOIN orders o ON o.order_id = u.order_id\nJOIN item_counts ic ON ic.order_id = u.order_id\nWHERE o.deleted_at IS NULL;",
+          "status": "verified",
+          "kinds": []
+        }
+      ],
+      "stop": "stop"
+    },
+    {
+      "question": "Which shipping carrier handled the most orders?",
+      "queried": true,
+      "first_blocked": false,
+      "first_kinds": [],
+      "verified": true,
+      "turns": 1,
+      "trace": [
+        {
+          "sql": "SELECT carrier, COUNT(DISTINCT order_id) AS orders_handled\nFROM shipments\nGROUP BY carrier\nORDER BY orders_handled DESC, carrier\nLIMIT 1;",
+          "status": "verified",
+          "kinds": []
+        }
+      ],
+      "stop": "stop"
+    },
+    {
+      "question": "What is our revenue per region, for completed orders only?",
+      "queried": true,
+      "first_blocked": false,
+      "first_kinds": [],
+      "verified": true,
+      "turns": 1,
+      "trace": [
+        {
+          "sql": "SELECT c.region, SUM(oi.net_amount) AS revenue\nFROM orders o\nJOIN customers c ON c.customer_id = o.customer_id\nJOIN order_items oi ON oi.order_id = o.order_id\nWHERE lower(o.status) = 'completed'\n  AND o.deleted_at IS NULL\nGROUP BY c.region\nORDER BY c.region;",
+          "status": "verified",
+          "kinds": []
+        }
+      ],
+      "stop": "stop"
+    },
+    {
+      "question": "How many distinct customers have placed an order?",
+      "queried": true,
+      "first_blocked": true,
+      "first_kinds": [
+        "REQUIRED_FILTER"
+      ],
+      "verified": true,
+      "turns": 2,
+      "trace": [
+        {
+          "sql": "SELECT COUNT(DISTINCT customer_id) AS distinct_customers_with_orders FROM orders;",
+          "status": "blocked",
+          "kinds": [
+            "REQUIRED_FILTER"
+          ]
+        },
+        {
+          "sql": "SELECT COUNT(DISTINCT customer_id) AS distinct_customers_with_orders FROM orders WHERE deleted_at IS NULL;",
+          "status": "verified",
+          "kinds": []
+        }
+      ],
+      "stop": "stop"
+    },
+    {
+      "question": "What is our revenue per shipping carrier?",
+      "queried": true,
+      "first_blocked": true,
+      "first_kinds": [
+        "FAN_OUT"
+      ],
+      "verified": true,
+      "turns": 7,
+      "trace": [
+        {
+          "sql": "SELECT s.carrier, SUM(oi.net_amount) AS revenue\nFROM shipments s\nJOIN orders o ON o.order_id = s.order_id\nJOIN order_items oi ON oi.order_id = o.order_id\nWHERE o.deleted_at IS NULL\nGROUP BY s.carrier\nORDER BY revenue DESC;",
+          "status": "blocked",
+          "kinds": [
+            "FAN_OUT"
+          ]
+        },
+        {
+          "sql": "SELECT COUNT(*) AS shipments, COUNT(DISTINCT order_id) AS shipped_orders, COUNT(*) - COUNT(DISTINCT order_id) AS extra_shipments FROM shipments;",
+          "status": "verified",
+          "kinds": []
+        },
+        {
+          "sql": "SELECT order_id, COUNT(*) AS shipment_count, COUNT(DISTINCT carrier) AS carriers FROM shipments GROUP BY order_id HAVING COUNT(*)>1 OR COUNT(DISTINCT carrier)>1 LIMIT 10;",
+          "status": "verified",
+          "kinds": []
+        },
+        {
+          "sql": "WITH order_revenue AS (\n  SELECT order_id, SUM(net_amount) AS order_revenue\n  FROM order_items\n  GROUP BY order_id\n)\nSELECT s.carrier, SUM(orv.order_revenue) AS revenue\nFROM shipments s\nJOIN orders o ON o.order_id = s.order_id\nJOIN order_revenue orv ON orv.order_id = s.order_id\nWHERE o.deleted_at IS NULL\nGROUP BY s.carrier\nORDER BY revenue DESC;",
+          "status": "verified",
+          "kinds": []
+        },
+        {
+          "sql": "WITH order_revenue AS (\n  SELECT order_id, SUM(net_amount) AS order_revenue\n  FROM order_items\n  GROUP BY order_id\n), shipment_counts AS (\n  SELECT order_id, COUNT(*) AS shipment_count\n  FROM shipments\n  GROUP BY order_id\n)\nSELECT s.carrier, SUM(orv.order_revenue / sc.shipment_count) AS allocated_revenue\nFROM shipments s\nJOIN orders o ON o.order_id = s.order_id\nJOIN order_revenue orv ON orv.order_id = s.order_id\nJOIN shipment_counts sc ON sc.order_id = s.order_id\nWHERE o.deleted_at IS NULL\nGROUP BY s.carrier\nORDER BY allocated_revenue DESC;",
+          "status": "verified",
+          "kinds": []
+        },
+        {
+          "sql": "WITH order_revenue AS (\n  SELECT order_id, SUM(net_amount) AS order_revenue\n  FROM order_items\n  GROUP BY order_id\n), order_carriers AS (\n  SELECT DISTINCT order_id, carrier\n  FROM shipments\n), carrier_counts AS (\n  SELECT order_id, COUNT(*) AS carrier_count\n  FROM order_carriers\n  GROUP BY order_id\n)\nSELECT oc.carrier, SUM(orv.order_revenue / cc.carrier_count) AS allocated_revenue\nFROM order_carriers oc\nJOIN orders o ON o.order_id = oc.order_id\nJOIN order_revenue orv ON orv.order_id = oc.order_id\nJOIN carrier_counts cc ON cc.order_id = oc.order_id\nWHERE o.deleted_at IS NULL\nGROUP BY oc.carrier\nORDER BY allocated_revenue DESC;",
+          "status": "verified",
+          "kinds": []
+        },
+        {
+          "sql": "WITH order_revenue AS (\n  SELECT oi.order_id, SUM(oi.net_amount) AS order_revenue\n  FROM order_items oi\n  JOIN orders o ON o.order_id = oi.order_id\n  WHERE o.deleted_at IS NULL\n  GROUP BY oi.order_id\n)\nSELECT SUM(order_revenue) AS total_revenue, COUNT(*) AS order_count\nFROM order_revenue;",
+          "status": "verified",
+          "kinds": []
+        }
+      ],
+      "stop": "stop"
+    },
+    {
+      "question": "How much revenue has each product generated?",
+      "queried": true,
+      "first_blocked": false,
+      "first_kinds": [],
+      "verified": true,
+      "turns": 5,
+      "trace": [
+        {
+          "sql": "SELECT status, COUNT(*) AS orders, SUM(CASE WHEN deleted_at IS NULL THEN 1 ELSE 0 END) AS not_deleted FROM orders GROUP BY status ORDER BY status",
+          "status": "verified",
+          "kinds": []
+        },
+        {
+          "sql": "SELECT oi.product_id, SUM(oi.net_amount) AS revenue\nFROM order_items oi\nJOIN orders o ON oi.order_id = o.order_id\nWHERE o.status = 'completed' AND o.deleted_at IS NULL\nGROUP BY oi.product_id\nORDER BY oi.product_id",
+          "status": "verified",
+          "kinds": []
+        },
+        {
+          "sql": "SELECT oi.product_id, SUM(oi.net_amount) AS revenue\nFROM order_items oi JOIN orders o ON oi.order_id = o.order_id\nWHERE o.status = 'completed' AND o.deleted_at IS NULL AND oi.product_id BETWEEN 51 AND 100\nGROUP BY oi.product_id ORDER BY oi.product_id",
+          "status": "verified",
+          "kinds": []
+        },
+        {
+          "sql": "SELECT oi.product_id, SUM(oi.net_amount) AS revenue\nFROM order_items oi JOIN orders o ON oi.order_id = o.order_id\nWHERE o.status = 'completed' AND o.deleted_at IS NULL AND oi.product_id BETWEEN 101 AND 150\nGROUP BY oi.product_id ORDER BY oi.product_id",
+          "status": "verified",
+          "kinds": []
+        },
+        {
+          "sql": "SELECT oi.product_id, SUM(oi.net_amount) AS revenue\nFROM order_items oi JOIN orders o ON oi.order_id = o.order_id\nWHERE o.status = 'completed' AND o.deleted_at IS NULL AND oi.product_id BETWEEN 151 AND 200\nGROUP BY oi.product_id ORDER BY oi.product_id",
+          "status": "verified",
+          "kinds": []
+        }
+      ],
+      "stop": "stop"
+    },
+    {
+      "question": "What is our total revenue, counting only orders that were actually shipped?",
+      "queried": true,
+      "first_blocked": true,
+      "first_kinds": [
+        "FAN_OUT"
+      ],
+      "verified": true,
+      "turns": 2,
+      "trace": [
+        {
+          "sql": "SELECT COALESCE(SUM(oi.net_amount), 0) AS total_revenue\nFROM order_items oi\nJOIN orders o ON o.order_id = oi.order_id\nWHERE o.deleted_at IS NULL\n  AND EXISTS (\n    SELECT 1\n    FROM shipments s\n    WHERE s.order_id = o.order_id\n  );",
+          "status": "blocked",
+          "kinds": [
+            "FAN_OUT"
+          ]
+        },
+        {
+          "sql": "WITH order_revenue AS (\n  SELECT order_id, SUM(net_amount) AS revenue\n  FROM order_items\n  GROUP BY order_id\n), shipped_orders AS (\n  SELECT DISTINCT order_id\n  FROM shipments\n)\nSELECT COALESCE(SUM(orv.revenue), 0) AS total_revenue\nFROM order_revenue orv\nJOIN orders o ON o.order_id = orv.order_id\nJOIN shipped_orders so ON so.order_id = o.order_id\nWHERE o.deleted_at IS NULL;",
+          "status": "verified",
+          "kinds": []
+        }
+      ],
+      "stop": "stop"
+    },
+    {
+      "question": "What is the average number of shipments per order?",
+      "queried": true,
+      "first_blocked": true,
+      "first_kinds": [
+        "REQUIRED_FILTER"
+      ],
+      "verified": true,
+      "turns": 2,
+      "trace": [
+        {
+          "sql": "SELECT COUNT(*) AS total_orders, (SELECT COUNT(*) FROM shipments) AS total_shipments, (SELECT COUNT(*) FROM shipments)::DOUBLE / NULLIF(COUNT(*),0) AS avg_shipments_per_order FROM orders;",
+          "status": "blocked",
+          "kinds": [
+            "REQUIRED_FILTER"
+          ]
+        },
+        {
+          "sql": "SELECT COUNT(s.shipment_id)::DOUBLE / NULLIF(COUNT(DISTINCT o.order_id), 0) AS avg_shipments_per_order\nFROM orders o\nLEFT JOIN shipments s ON s.order_id = o.order_id\nWHERE o.deleted_at IS NULL;",
+          "status": "verified",
+          "kinds": []
+        }
+      ],
+      "stop": "stop"
+    }
+  ]
+}

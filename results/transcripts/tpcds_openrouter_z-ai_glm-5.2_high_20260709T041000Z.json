@@ -1,0 +1,346 @@
+{
+  "meta": {
+    "provider": "openrouter",
+    "model": "z-ai/glm-5.2",
+    "schema": "tpcds",
+    "effort": "high",
+    "ts": "2026-07-09T04:10:00Z",
+    "git_sha": "810bb9e33",
+    "contract_version": "tpcds-v1",
+    "contract_sha256": "e8288a8300c7be8c1145d9be9662096b789755662e583154b92752f8bd53d699"
+  },
+  "summary": {
+    "n": 14,
+    "first_blocked": 5,
+    "verified": 14,
+    "self_corrected": 5,
+    "kinds": {
+      "SURFACE": 19,
+      "PARSE": 1,
+      "FAN_OUT": 4
+    },
+    "errored": 0
+  },
+  "records": [
+    {
+      "question": "What were our total store sales?",
+      "queried": true,
+      "first_blocked": false,
+      "first_kinds": [],
+      "verified": true,
+      "turns": 1,
+      "trace": [
+        {
+          "sql": "SELECT SUM(ss_ext_sales_price) AS total_store_sales FROM store_sales",
+          "status": "verified",
+          "kinds": []
+        }
+      ],
+      "stop": "stop"
+    },
+    {
+      "question": "What were our total store sales by item category?",
+      "queried": true,
+      "first_blocked": false,
+      "first_kinds": [],
+      "verified": true,
+      "turns": 1,
+      "trace": [
+        {
+          "sql": "SELECT i.i_category, SUM(ss.ss_ext_sales_price) AS total_sales\nFROM store_sales ss\nJOIN item i ON ss.ss_item_sk = i.i_item_sk\nGROUP BY i.i_category\nORDER BY total_sales DESC;",
+          "status": "verified",
+          "kinds": []
+        }
+      ],
+      "stop": "stop"
+    },
+    {
+      "question": "What are our net store sales after returns, broken down by item?",
+      "queried": true,
+      "first_blocked": true,
+      "first_kinds": [
+        "SURFACE",
+        "SURFACE",
+        "SURFACE",
+        "SURFACE",
+        "SURFACE",
+        "SURFACE",
+        "SURFACE",
+        "SURFACE"
+      ],
+      "verified": true,
+      "turns": 2,
+      "trace": [
+        {
+          "sql": "SELECT \n    i.i_item_sk,\n    i.i_product_name,\n    i.i_brand,\n    COALESCE(ss.total_sales, 0) AS gross_sales,\n    COALESCE(sr.total_returns, 0) AS return_amount,\n    COALESCE(ss.total_sales, 0) - COALESCE(sr.total_returns, 0) AS net_sales_after_returns\nFROM item i\nLEFT JOIN (\n    SELECT ss_item_sk, SUM(ss_net_paid) AS total_sales\n    FROM store_sales\n    GROUP BY ss_item_sk\n) ss ON i.i_item_sk = ss.ss_item_sk\nLEFT JOIN (\n    SELECT sr_item_sk, SUM(sr_return_amt) AS total_returns\n    FROM store_returns\n    GROUP BY sr_item_sk\n) sr ON i.i_item_sk = sr.sr_item_sk\nWHERE COALESCE(ss.total_sales, 0) > 0 OR COALESCE(sr.total_returns, 0) > 0\nORDER BY net_sales_after_returns DESC\nLIMIT 25",
+          "status": "blocked",
+          "kinds": [
+            "SURFACE",
+            "SURFACE",
+            "SURFACE",
+            "SURFACE",
+            "SURFACE",
+            "SURFACE",
+            "SURFACE",
+            "SURFACE"
+          ]
+        },
+        {
+          "sql": "WITH sales AS (\n    SELECT ss_item_sk, SUM(ss_net_paid) AS total_sales\n    FROM store_sales\n    GROUP BY ss_item_sk\n),\nreturns AS (\n    SELECT sr_item_sk, SUM(sr_return_amt) AS total_returns\n    FROM store_returns\n    GROUP BY sr_item_sk\n)\nSELECT \n    i.i_item_sk,\n    i.i_product_name,\n    i.i_brand,\n    COALESCE(s.total_sales, 0) AS gross_sales,\n    COALESCE(r.total_returns, 0) AS return_amount,\n    COALESCE(s.total_sales, 0) - COALESCE(r.total_returns, 0) AS net_sales_after_returns\nFROM item i\nLEFT JOIN sales s ON i.i_item_sk = s.ss_item_sk\nLEFT JOIN returns r ON i.i_item_sk = r.sr_item_sk\nWHERE COALESCE(s.total_sales, 0) > 0 OR COALESCE(r.total_returns, 0) > 0\nORDER BY net_sales_after_returns DESC\nLIMIT 25",
+          "status": "verified",
+          "kinds": []
+        }
+      ],
+      "stop": "stop"
+    },
+    {
+      "question": "How much did customers return, in dollars, by store?",
+      "queried": true,
+      "first_blocked": true,
+      "first_kinds": [
+        "PARSE"
+      ],
+      "verified": true,
+      "turns": 2,
+      "trace": [
+        {
+          "sql": "sql</arg_key><arg_value>SELECT \n    s.s_store_name,\n    s.s_store_id,\n    SUM(sr.sr_return_amt) AS total_return_amt\nFROM store_returns sr\nJOIN store s ON sr.sr_store_sk = s.s_store_sk\nGROUP BY s.s_store_name, s.s_store_id\nORDER BY total_return_amt DESC",
+          "status": "blocked",
+          "kinds": [
+            "PARSE"
+          ]
+        },
+        {
+          "sql": "SELECT s.s_store_name, SUM(sr.sr_return_amt) AS total_return_amt\nFROM store_returns sr\nJOIN store s ON sr.sr_store_sk = s.s_store_sk\nGROUP BY s.s_store_name\nORDER BY total_return_amt DESC",
+          "status": "verified",
+          "kinds": []
+        }
+      ],
+      "stop": "stop"
+    },
+    {
+      "question": "What were our total store sales and total returns for each item category?",
+      "queried": true,
+      "first_blocked": true,
+      "first_kinds": [
+        "SURFACE",
+        "SURFACE",
+        "SURFACE",
+        "SURFACE",
+        "FAN_OUT",
+        "FAN_OUT"
+      ],
+      "verified": true,
+      "turns": 4,
+      "trace": [
+        {
+          "sql": "SELECT \n    COALESCE(s.i_category, r.i_category) AS i_category,\n    COALESCE(total_sales, 0) AS total_store_sales,\n    COALESCE(total_returns, 0) AS total_store_returns\nFROM (\n    SELECT i.i_category, SUM(ss.ss_ext_sales_price) AS total_sales\n    FROM store_sales ss\n    JOIN item i ON ss.ss_item_sk = i.i_item_sk\n    GROUP BY i.i_category\n) s\nFULL OUTER JOIN (\n    SELECT i.i_category, SUM(sr.sr_return_amt) AS total_returns\n    FROM store_returns sr\n    JOIN item i ON sr.sr_item_sk = i.i_item_sk\n    GROUP BY i.i_category\n) r\nON s.i_category = r.i_category\nORDER BY i_category;",
+          "status": "blocked",
+          "kinds": [
+            "SURFACE",
+            "SURFACE",
+            "SURFACE",
+            "SURFACE",
+            "FAN_OUT",
+            "FAN_OUT"
+          ]
+        },
+        {
+          "sql": "WITH sales AS (\n    SELECT i.i_category, SUM(ss.ss_ext_sales_price) AS total_store_sales\n    FROM store_sales ss\n    JOIN item i ON ss.ss_item_sk = i.i_item_sk\n    GROUP BY i.i_category\n),\nreturns AS (\n    SELECT i.i_category, SUM(sr.sr_return_amt) AS total_store_returns\n    FROM store_returns sr\n    JOIN item i ON sr.sr_item_sk = i.i_item_sk\n    GROUP BY i.i_category\n)\nSELECT \n    COALESCE(sales.i_category, returns.i_category) AS i_category,\n    COALESCE(sales.total_store_sales, 0) AS total_store_sales,\n    COALESCE(returns.total_store_returns, 0) AS total_store_returns\nFROM sales\nFULL OUTER JOIN returns ON sales.i_category = returns.i_category\nORDER BY i_category;",
+          "status": "blocked",
+          "kinds": [
+            "FAN_OUT",
+            "FAN_OUT"
+          ]
+        },
+        {
+          "sql": "SELECT i.i_category, SUM(ss.ss_ext_sales_price) AS total_store_sales\nFROM store_sales ss\nJOIN item i ON ss.ss_item_sk = i.i_item_sk\nGROUP BY i.i_category\nORDER BY i.i_category;",
+          "status": "verified",
+          "kinds": []
+        },
+        {
+          "sql": "SELECT i.i_category, SUM(sr.sr_return_amt) AS total_store_returns\nFROM store_returns sr\nJOIN item i ON sr.sr_item_sk = i.i_item_sk\nGROUP BY i.i_category\nORDER BY i.i_category;",
+          "status": "verified",
+          "kinds": []
+        }
+      ],
+      "stop": "stop"
+    },
+    {
+      "question": "Which items were returned the most, compared with how many were sold?",
+      "queried": true,
+      "first_blocked": true,
+      "first_kinds": [
+        "SURFACE",
+        "SURFACE",
+        "SURFACE",
+        "SURFACE",
+        "SURFACE",
+        "SURFACE",
+        "SURFACE"
+      ],
+      "verified": true,
+      "turns": 2,
+      "trace": [
+        {
+          "sql": "SELECT\n    i.i_item_sk,\n    i.i_product_name,\n    COALESCE(s.sold_qty, 0)   AS sold_qty,\n    COALESCE(r.returned_qty, 0) AS returned_qty,\n    ROUND(COALESCE(r.returned_qty, 0) * 1.0 / NULLIF(s.sold_qty, 0) * 100, 2) AS return_rate_pct\nFROM item i\nLEFT JOIN (\n    SELECT ss_item_sk, SUM(ss_quantity) AS sold_qty\n    FROM store_sales\n    GROUP BY ss_item_sk\n) s ON i.i_item_sk = s.ss_item_sk\nLEFT JOIN (\n    SELECT sr_item_sk, SUM(sr_return_quantity) AS returned_qty\n    FROM store_returns\n    GROUP BY sr_item_sk\n) r ON i.i_item_sk = r.sr_item_sk\nWHERE s.sold_qty IS NOT NULL\nORDER BY returned_qty DESC, return_rate_pct DESC\nLIMIT 15;",
+          "status": "blocked",
+          "kinds": [
+            "SURFACE",
+            "SURFACE",
+            "SURFACE",
+            "SURFACE",
+            "SURFACE",
+            "SURFACE",
+            "SURFACE"
+          ]
+        },
+        {
+          "sql": "WITH sold AS (\n    SELECT ss_item_sk, SUM(ss_quantity) AS sold_qty\n    FROM store_sales\n    GROUP BY ss_item_sk\n),\nreturned AS (\n    SELECT sr_item_sk, SUM(sr_return_quantity) AS returned_qty\n    FROM store_returns\n    GROUP BY sr_item_sk\n)\nSELECT\n    i.i_item_sk,\n    i.i_product_name,\n    COALESCE(sold.sold_qty, 0) AS sold_qty,\n    COALESCE(returned.returned_qty, 0) AS returned_qty,\n    ROUND(COALESCE(returned.returned_qty, 0) * 1.0 / NULLIF(sold.sold_qty, 0) * 100, 2) AS return_rate_pct\nFROM item i\nJOIN sold ON i.i_item_sk = sold.ss_item_sk\nLEFT JOIN returned ON i.i_item_sk = returned.sr_item_sk\nORDER BY returned_qty DESC, return_rate_pct DESC\nLIMIT 15;",
+          "status": "verified",
+          "kinds": []
+        }
+      ],
+      "stop": "stop"
+    },
+    {
+      "question": "What were our store sales in the year 2001?",
+      "queried": true,
+      "first_blocked": false,
+      "first_kinds": [],
+      "verified": true,
+      "turns": 1,
+      "trace": [
+        {
+          "sql": "SELECT SUM(ss.ss_ext_sales_price) AS total_store_sales\nFROM store_sales ss\nJOIN date_dim d ON ss.ss_sold_date_sk = d.d_date_sk\nWHERE d.d_year = 2001",
+          "status": "verified",
+          "kinds": []
+        }
+      ],
+      "stop": "stop"
+    },
+    {
+      "question": "What is the average sales price per item?",
+      "queried": true,
+      "first_blocked": false,
+      "first_kinds": [],
+      "verified": true,
+      "turns": 1,
+      "trace": [
+        {
+          "sql": "SELECT AVG(ss_sales_price) AS avg_sales_price FROM store_sales",
+          "status": "verified",
+          "kinds": []
+        }
+      ],
+      "stop": "stop"
+    },
+    {
+      "question": "What is our net store revenue (sales minus returns) per customer?",
+      "queried": true,
+      "first_blocked": false,
+      "first_kinds": [],
+      "verified": true,
+      "turns": 1,
+      "trace": [
+        {
+          "sql": "WITH sales AS (\n    SELECT\n        ss_customer_sk AS customer_sk,\n        SUM(ss_ext_sales_price) AS total_sales\n    FROM store_sales\n    GROUP BY ss_customer_sk\n),\nreturns AS (\n    SELECT\n        sr_customer_sk AS customer_sk,\n        SUM(sr_return_amt) AS total_returns\n    FROM store_returns\n    GROUP BY sr_customer_sk\n)\nSELECT\n    COUNT(*) AS num_customers,\n    ROUND(SUM(COALESCE(s.total_sales, 0)) - SUM(COALESCE(r.total_returns, 0)), 2) AS net_revenue,\n    ROUND(\n        (SUM(COALESCE(s.total_sales, 0)) - SUM(COALESCE(r.total_returns, 0))) / COUNT(*),\n        2\n    ) AS net_revenue_per_customer\nFROM sales s\nFULL OUTER JOIN returns r ON s.customer_sk = r.customer_sk",
+          "status": "verified",
+          "kinds": []
+        }
+      ],
+      "stop": "stop"
+    },
+    {
+      "question": "How many separate item returns were recorded?",
+      "queried": true,
+      "first_blocked": false,
+      "first_kinds": [],
+      "verified": true,
+      "turns": 1,
+      "trace": [
+        {
+          "sql": "SELECT COUNT(*) AS total_returns FROM store_returns",
+          "status": "verified",
+          "kinds": []
+        }
+      ],
+      "stop": "stop"
+    },
+    {
+      "question": "What were our total store sales by state?",
+      "queried": true,
+      "first_blocked": false,
+      "first_kinds": [],
+      "verified": true,
+      "turns": 1,
+      "trace": [
+        {
+          "sql": "SELECT s.s_state,\n       SUM(ss.ss_ext_sales_price) AS total_sales\nFROM store_sales ss\nJOIN store s ON ss.ss_store_sk = s.s_store_sk\nGROUP BY s.s_state\nORDER BY total_sales DESC;",
+          "status": "verified",
+          "kinds": []
+        }
+      ],
+      "stop": "stop"
+    },
+    {
+      "question": "What is our total store sales revenue including tax?",
+      "queried": true,
+      "first_blocked": false,
+      "first_kinds": [],
+      "verified": true,
+      "turns": 1,
+      "trace": [
+        {
+          "sql": "SELECT SUM(ss_net_paid_inc_tax) AS total_revenue_inc_tax FROM store_sales;",
+          "status": "verified",
+          "kinds": []
+        }
+      ],
+      "stop": "stop"
+    },
+    {
+      "question": "What is the total quantity of items sold and returned, per store?",
+      "queried": true,
+      "first_blocked": true,
+      "first_kinds": [
+        "FAN_OUT",
+        "FAN_OUT"
+      ],
+      "verified": true,
+      "turns": 2,
+      "trace": [
+        {
+          "sql": "SELECT \n    s.s_store_sk,\n    s.s_store_name,\n    s.s_city,\n    COALESCE(SUM(ss.ss_quantity), 0) AS total_sold_quantity,\n    COALESCE(SUM(sr.sr_return_quantity), 0) AS total_returned_quantity\nFROM store s\nLEFT JOIN store_sales ss ON s.s_store_sk = ss.ss_store_sk\nLEFT JOIN store_returns sr ON s.s_store_sk = sr.sr_store_sk\nGROUP BY s.s_store_sk, s.s_store_name, s.s_city\nORDER BY s.s_store_sk",
+          "status": "blocked",
+          "kinds": [
+            "FAN_OUT",
+            "FAN_OUT"
+          ]
+        },
+        {
+          "sql": "WITH sold AS (\n    SELECT ss_store_sk, SUM(ss_quantity) AS total_sold_quantity\n    FROM store_sales\n    GROUP BY ss_store_sk\n),\nreturned AS (\n    SELECT sr_store_sk, SUM(sr_return_quantity) AS total_returned_quantity\n    FROM store_returns\n    GROUP BY sr_store_sk\n)\nSELECT \n    s.s_store_sk,\n    s.s_store_name,\n    s.s_city,\n    COALESCE(sold.total_sold_quantity, 0) AS total_sold_quantity,\n    COALESCE(returned.total_returned_quantity, 0) AS total_returned_quantity\nFROM store s\nLEFT JOIN sold ON s.s_store_sk = sold.ss_store_sk\nLEFT JOIN returned ON s.s_store_sk = returned.sr_store_sk\nORDER BY s.s_store_sk",
+          "status": "verified",
+          "kinds": []
+        }
+      ],
+      "stop": "stop"
+    },
+    {
+      "question": "Which state had the highest return rate?",
+      "queried": true,
+      "first_blocked": false,
+      "first_kinds": [],
+      "verified": true,
+      "turns": 1,
+      "trace": [
+        {
+          "sql": "WITH sales_by_state AS (\n    SELECT s_state AS state, SUM(ss_quantity) AS total_sold\n    FROM store_sales ss\n    JOIN store s ON ss.ss_store_sk = s.s_store_sk\n    GROUP BY s_state\n),\nreturns_by_state AS (\n    SELECT s_state AS state, SUM(sr_return_quantity) AS total_returned\n    FROM store_returns sr\n    JOIN store s ON sr.sr_store_sk = s.s_store_sk\n    GROUP BY s_state\n)\nSELECT r.state,\n       r.total_returned,\n       sa.total_sold,\n       CAST(r.total_returned AS DOUBLE) / sa.total_sold AS return_rate\nFROM returns_by_state r\nJOIN sales_by_state sa ON r.state = sa.state\nORDER BY return_rate DESC\nLIMIT 1;",
+          "status": "verified",
+          "kinds": []
+        }
+      ],
+      "stop": "stop"
+    }
+  ]
+}

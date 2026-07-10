@@ -1,0 +1,1 @@
+{"ts": "2026-07-07T22:43:49Z", "git_sha": "5dc22b3cc", "kind": "benchmark", "model": "deterministic (seed 42)", "contract_version": "v1", "contract_sha256": "dff363a1bdbd2a28b938e767fd45e5af01c800dfba97740263135bb601e220f8", "wrong": 9, "caught": 7, "catch_rate": 0.778, "false_positives": 0, "without_accuracy": 0.308, "with_accuracy": 0.846}

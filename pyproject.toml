@@ -1,0 +1,29 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "sqlproctor"
+version = "0.1.0"
+description = "Deterministic semantic verification for agent-generated SQL"
+readme = "README.md"
+requires-python = ">=3.10"
+license = "MIT"
+dependencies = [
+    "sqlglot>=30.12",
+    "duckdb>=1.0",
+    "mcp>=1.28,<2",
+    "pyyaml>=6.0",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=8.0"]
+# Only for the live-LLM proof (demo/live_eval.py); no LLM in the pinned runtime.
+# anthropic for Claude models; openai for OpenRouter / any OpenAI-compatible host.
+demo-live = ["anthropic>=0.40", "openai>=1.40"]
+
+[project.scripts]
+sqlproctor = "sqlproctor.cli:main"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/sqlproctor"]
