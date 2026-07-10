@@ -20,17 +20,27 @@ If your agents run against a usage-billed warehouse (BigQuery, Snowflake, Athena
 
 All of these parse and execute. All of them return the wrong number. The core is a set of structural checks over the parsed query (built on [sqlglot](https://github.com/tobymao/sqlglot), roughly 30 SQL dialects), so it is deterministic and explainable.
 
-## Quickstart
+## Install
 
 ```bash
+pip install sqlproctor
+```
+
+The `sqlproctor` CLI checks a query against the contract it must satisfy:
+
+```bash
+sqlproctor check your_query.sql --contract your_contract.yml
+```
+
+## See it in action (from source)
+
+The demos, example contracts, and tests live in the repo and are not shipped in the package, so clone to run them:
+
+```bash
+git clone https://github.com/debabsah/sqlproctor && cd sqlproctor
 pip install -e ".[dev]"
 python examples/seed.py          # builds the demo DuckDB (reproducible, fixed seed)
 python demo/demo.py              # watch an agent get blocked, correct itself, and pass
-```
-
-Check a single query from the CLI:
-
-```bash
 sqlproctor check examples/queries/revenue_by_region_bad.sql
 ```
 
@@ -40,7 +50,7 @@ The demo seeds a real retail warehouse and asks one ordinary question: revenue b
 
 The accuracy benchmark (`python demo/eval.py`) runs a mix of correct and wrong queries with known outcomes. On the current set of 13:
 
-![Agent accuracy rises from 31% without sqlproctor to 85% with it, with zero false positives](https://cdn.jsdelivr.net/gh/debabsah/sqlproctor@main/docs/img/accuracy-uplift.svg)
+![Agent accuracy rises from 31% without sqlproctor to 85% with it, with zero false positives](docs/img/accuracy-uplift.svg)
 
 | Metric | Result |
 |--------|--------|
@@ -58,7 +68,7 @@ The benchmark above answers one question (does the guard convert to accuracy: ye
 
 **Every model trips the contract on its own first query.** On the retail schema (16 questions, reasoning effort high):
 
-![First query blocked per model on retail: Claude Opus 4.8 15/16, Gemini 3.1 Pro 9/16, GPT-5.5 8/16, GLM-5.2 8/16](https://cdn.jsdelivr.net/gh/debabsah/sqlproctor@main/docs/img/blocked-per-model.svg)
+![First query blocked per model on retail: Claude Opus 4.8 15/16, Gemini 3.1 Pro 9/16, GPT-5.5 8/16, GLM-5.2 8/16](docs/img/blocked-per-model.svg)
 
 | Model | First query blocked | Self-corrected | Reached a verified answer |
 | --- | --- | --- | --- |
@@ -71,7 +81,7 @@ This is **not a capability ranking.** Opus blocks highest because it writes dire
 
 **The credibility centerpiece.** Asked "total quantity of items sold by shipping carrier" (true answer 40,756), Claude Opus 4.8 and Gemini 3.1 Pro *independently* wrote the identical CTE-laundered fan-out and both returned **101,027** (a 2.48x overstatement). V1 missed it; these runs exposed the blind spot; it is now **closed** ([`docs/LIMITATIONS.md`](docs/LIMITATIONS.md) #1). GPT-5.5 gave a defensible 47,138; GLM-5.2 held the line and emitted no number rather than a wrong one. Finding our own hole across two frontier models and closing it is the loop working on the tool itself.
 
-![Claude Opus 4.8 and Gemini 3.1 Pro both returned the identical 101,027, 2.48x the true answer of 40,756; GPT-5.5 a defensible 47,138; GLM-5.2 held the line and emitted no number](https://cdn.jsdelivr.net/gh/debabsah/sqlproctor@main/docs/img/truth-line.svg)
+![Claude Opus 4.8 and Gemini 3.1 Pro both returned the identical 101,027, 2.48x the true answer of 40,756; GPT-5.5 a defensible 47,138; GLM-5.2 held the line and emitted no number](docs/img/truth-line.svg)
 
 **On a recognized benchmark.** On **TPC-DS**, all three frontier models wrote the store-sales fan-out from the schema alone: true store sales are **$4.74B**, and a naive join through a shared dimension inflates that to **$95.4B**, a **20x** silent overstatement. The guard blocked it and every model self-corrected.
 
